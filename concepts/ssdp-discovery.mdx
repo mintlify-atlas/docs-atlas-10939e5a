@@ -1,0 +1,84 @@
+---
+title: "SSDP device discovery"
+description: "How the server advertises itself on the local network using SSDP"
+---
+
+## What is SSDP?
+
+SSDP (Simple Service Discovery Protocol) is the discovery layer of UPnP. It lets devices announce themselves and respond to searches on a local network without any pre-configuration — no static IPs, no mDNS, no DNS-SD.
+
+SSDP runs over UDP multicast. Devices that want to be found join a well-known multicast group address (`239.255.255.250`) and listen on port 1900. Clients looking for devices send an M-SEARCH request to that same address and port, and any matching server responds directly to the client.
+
+## How this server implements SSDP
+
+The server creates a UDP socket and joins the multicast group at startup:
+
+```typescript
+// src/upnp/ssdp.ts
+import dgram from 'node:dgram';
+
+const ssdp = dgram.createSocket('udp4');
+ssdp.bind(1900, function handleListening() {
+  ssdp.addMembership('239.255.255.250');
+});
+```
+
+When an M-SEARCH packet arrives, the server checks the incoming SSDP message and sends a unicast response directly back to the client that issued the search.
+
+```typescript
+// src/server.ts
+ssdp.addListener('message', function handleMessage(message, rinfo) {
+  const incomingMessage = new SsdpIncomingMessage(message);
+  if (incomingMessage.method === 'M-SEARCH') {
+    ssdp.send(MediaServerDiscoveryMessage.serialize(), rinfo.port, rinfo.address);
+  }
+});
+```
+
+## The M-SEARCH / response flow
+
+A DLNA client broadcasts an M-SEARCH request over UDP:
+
+```
+M-SEARCH * HTTP/1.1
+HOST: 239.255.255.250:1900
+MAN: "ssdp:discover"
+MX: 3
+ST: ssdp:all
+```
+
+The server responds with a unicast UDP packet sent directly to the client's IP and port:
+
+```
+HTTP/1.1 200 OK
+CACHE-CONTROL: no-store
+LOCATION: http://[IP]:8080/description.xml
+SERVER: node/[version] UPnP/1.1
+ST: urn:schemas-upnp-org:device:MediaServer:1
+USN: uuid:[uuid]::urn:schemas-upnp-org:device:MediaServer:1
+```
+
+### Response headers explained
+
+| Header | Value | Purpose |
+|---|---|---|
+| `CACHE-CONTROL` | `no-store` | Instructs clients not to cache this response; they must re-discover on each search |
+| `LOCATION` | `http://[IP]:8080/description.xml` | URL where the client can fetch the full UPnP device description |
+| `SERVER` | `node/[version] UPnP/1.1` | Identifies the server software and UPnP version |
+| `ST` | `urn:schemas-upnp-org:device:MediaServer:1` | The device type this server claims to be |
+| `USN` | `uuid:[uuid]::urn:schemas-upnp-org:device:MediaServer:1` | A unique identifier for this specific server instance |
+
+The `uuid` value is generated once at startup and remains stable for the lifetime of the process.
+
+## CACHE-CONTROL and re-discovery
+
+Setting `CACHE-CONTROL: no-store` means clients will not cache the discovery response. Every time a client performs an M-SEARCH, it must receive a fresh response from the server. This keeps the server's presence on the network tied to the process actually running — if the server stops, clients will not find a stale cached entry.
+
+<Note>
+  Port 1900 is a privileged port on some operating systems. If the server fails to bind on startup, you may need to run it with elevated permissions or configure your firewall to allow UDP traffic on port 1900.
+</Note>
+
+## Further reading
+
+- [DLNA and UPnP overview](/concepts/dlna-upnp) — the full protocol stack
+- [SOAP and the ContentDirectory service](/concepts/soap-content-directory) — what clients do after discovery

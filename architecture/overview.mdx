@@ -1,0 +1,67 @@
+---
+title: "Architecture overview"
+description: How the DLNA Media Server is structured internally
+---
+
+The DLNA media server is built around two distinct protocol planes that work together to make the server discoverable and functional on a local network. A single entry point (`server.ts`) wires both planes together with no dependency injection framework.
+
+<Note>
+  `server.ts` is the sole entry point. It imports both protocol modules directly and registers event listeners on each — no IoC container or service locator is used.
+</Note>
+
+## Protocol planes
+
+### UDP plane — SSDP discovery
+
+`src/upnp/ssdp.ts` creates a UDP socket bound to port **1900** and joins the UPnP multicast group `239.255.255.250`. When a UPnP control point sends an `M-SEARCH` discovery request to the multicast address, `server.ts` receives it and replies with a pre-built `SsdpOutgoingMessage` that advertises the server's HTTP location.
+
+### TCP plane — SOAP / HTTP
+
+`src/upnp/soap.ts` creates a standard Node.js `http.Server` listening on port **8080**. Incoming HTTP requests are dispatched through `router.ts` to the appropriate handler. Handlers that need to respond to UPnP SOAP actions delegate to `services.ts`, which renders XML via Edge.js templates stored in `resources/`.
+
+## Module responsibilities
+
+| File | Role | Key exports |
+|------|------|-------------|
+| `src/server.ts` | Entry point; wires SSDP + SOAP event listeners | — |
+| `src/upnp/ssdp.ts` | UDP multicast socket; SSDP message classes | `ssdp` (dgram socket), `SsdpIncomingMessage`, `SsdpOutgoingMessage` |
+| `src/upnp/soap.ts` | HTTP server; SOAP request parsing | `soap` (http.Server), `SoapRequest` |
+| `src/router.ts` | Maps HTTP method + path to handler functions | `router` (nested object) |
+| `src/services.ts` | ContentDirectory SOAP action handlers | action handler functions |
+| `src/constants/ip.ts` | Auto-detects local IPv4 address | `ip` |
+| `src/constants/uuid.ts` | Generates a random UUID for the device | `uuid` |
+| `resources/*.edge` | Edge.js XML response templates | rendered via `edge.render()` |
+
+## Startup flow
+
+```typescript
+// server.ts (simplified)
+import soap from './upnp/soap.js';     // starts HTTP on :8080
+import ssdp from './upnp/ssdp.js';     // starts UDP on :1900
+
+soap.addListener('request', handleRequest);   // wire HTTP dispatch
+ssdp.addListener('message', handleMessage);   // wire SSDP dispatch
+```
+
+Both servers start listening the moment their modules are imported. `server.ts` then attaches listeners to handle incoming traffic from each plane.
+
+## Data flow
+
+### SSDP discovery (UDP)
+
+```
+UPnP client  →  M-SEARCH (UDP multicast :1900)
+             →  ssdp 'message' event  →  server.ts handleMessage
+             →  SsdpIncomingMessage.method === 'M-SEARCH'
+             →  ssdp.send(MediaServerDiscoveryMessage)  →  client
+```
+
+### HTTP / SOAP (TCP)
+
+```
+UPnP client  →  HTTP request (:8080)
+             →  soap 'request' event  →  server.ts handleRequest
+             →  router[method][url](request, response)
+             →  services.ts action handler
+             →  edge.render(template, data)  →  XML response  →  client
+```

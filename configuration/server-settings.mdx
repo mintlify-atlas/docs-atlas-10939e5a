@@ -1,0 +1,92 @@
+---
+title: "Server settings"
+description: "How the server determines its network address, ports, and identity."
+---
+
+Most server settings are determined automatically at startup — the server detects your IP address, generates a UUID, and begins listening on fixed ports. The sections below describe each setting, where it comes from, and how to change it if needed.
+
+## Network address
+
+The server detects its own IP address at startup by scanning your machine's network interfaces (`os.networkInterfaces()`). It picks the first non-internal IPv4 address it finds. If no external interface is available, it falls back to `127.0.0.1`.
+
+```typescript src/constants/ip.ts
+export default Object.values(os.networkInterfaces()).flat().find(networkInterface =>
+  networkInterface.family === 'IPv4' && !networkInterface.internal
+)?.address ?? '127.0.0.1';
+```
+
+This address is used in the device description XML and in all URLs the server advertises to clients.
+
+<Note>
+  If your machine has multiple active network interfaces (for example, both Ethernet and Wi-Fi), the server uses whichever external IPv4 address `os.networkInterfaces()` returns first. If you need to control which interface is used, you can edit `src/constants/ip.ts` to hardcode a specific address and rebuild with `npm run build`.
+</Note>
+
+## Ports
+
+The server uses two fixed ports:
+
+| Service | Protocol | Port | Purpose |
+|---------|----------|------|---------|
+| SOAP/HTTP | TCP | `8080` | Device description, ContentDirectory Browse, event subscriptions |
+| SSDP | UDP | `1900` | UPnP multicast discovery (`239.255.255.250`) |
+
+Both ports are hardcoded in their respective source files (`src/upnp/soap.ts` for HTTP, `src/upnp/ssdp.ts` for SSDP). When the server starts, it logs:
+
+```
+Listening at soap://192.168.1.50:8080
+Listening at ssdp://192.168.1.50:1900
+```
+
+<Note>
+  Port `1900` is the standard SSDP port defined by the UPnP specification. Changing it would prevent DLNA clients from discovering the server automatically, since they send `M-SEARCH` multicast messages to `239.255.255.250:1900` by default.
+</Note>
+
+## Device UUID
+
+The server generates a fresh UUID every time it starts using `crypto.randomUUID()`:
+
+```typescript src/constants/uuid.ts
+export default crypto.randomUUID();
+```
+
+This UUID is included in SSDP advertisements and the device description XML so clients can distinguish this server from others on the network.
+
+<Note>
+  Because the UUID changes on every restart, some DLNA clients that cache device identifiers may display duplicate entries or take a moment to re-recognize the server. If this is disruptive, you can replace the `crypto.randomUUID()` call in `src/constants/uuid.ts` with a hardcoded UUID string and rebuild.
+</Note>
+
+## Friendly name
+
+The name DLNA clients display in their device lists is set in `src/router.ts`:
+
+```typescript src/router.ts
+response.end(await edge.render('description', {
+  uuid,
+  ip,
+  port: 8080,
+  friendlyName: 'NodeJS Media Server',
+  manufacturer: 'Mark Auger',
+  manufacturerURL: 'https://swimauger.com'
+}));
+```
+
+To change the name that appears in your DLNA clients, update the `friendlyName` value in this file.
+
+## Manufacturer info
+
+The `manufacturer` and `manufacturerURL` fields in `src/router.ts` are included in the UPnP device description XML. Some clients display this information alongside the friendly name.
+
+| Field | Default value |
+|-------|---------------|
+| `manufacturer` | `'Mark Auger'` |
+| `manufacturerURL` | `'https://swimauger.com'` |
+
+<Info>
+  To customize the server's identity — friendly name, manufacturer, or manufacturer URL — edit the corresponding values in `src/router.ts` and rebuild:
+
+  ```bash
+  npm run build
+  ```
+
+  Restart the server after rebuilding for changes to take effect.
+</Info>

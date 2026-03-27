@@ -1,0 +1,44 @@
+---
+title: "Introduction"
+description: "A TypeScript implementation of a DLNA/UPnP media server that streams video content to DLNA-compatible devices on your local network."
+---
+
+## What is DLNA Media Server?
+
+DLNA Media Server is a lightweight, TypeScript-based implementation of a [DLNA](https://www.dlna.org/) (Digital Living Network Alliance) media server. It runs on Node.js and enables you to stream video content from your machine to any DLNA-compatible device on your local network — smart TVs, game consoles, media players, and more.
+
+The server implements the UPnP (Universal Plug and Play) `MediaServer:1` device specification, including:
+
+- **SSDP** (Simple Service Discovery Protocol) for automatic device advertisement
+- **ContentDirectory:1** service for browsing and serving media metadata
+- **SOAP over HTTP** for UPnP service control messages
+
+<CardGroup cols={2}>
+  <Card title="Quickstart" icon="rocket" href="/quickstart">
+    Get the server running and streaming in minutes
+  </Card>
+  <Card title="How It Works" icon="lightbulb" href="/concepts/dlna-upnp">
+    Understand the DLNA/UPnP protocol stack
+  </Card>
+  <Card title="Configure Your Gallery" icon="film" href="/configuration/gallery">
+    Add your video files to the media gallery
+  </Card>
+  <Card title="Architecture" icon="sitemap" href="/architecture/overview">
+    Explore the server's internal structure
+  </Card>
+</CardGroup>
+
+## Key features
+
+- **Zero-config device discovery** — SSDP multicast automatically advertises the server on your LAN; no manual IP entry needed on client devices
+- **ContentDirectory browsing** — DLNA clients can browse, search, and fetch your video library via standard UPnP SOAP actions
+- **JSON-driven media gallery** — add videos by editing a single `gallery.json` file; no database required
+- **Auto IP detection** — the server detects your local IPv4 address at startup, so it works across network changes
+- **Edge.js XML templates** — all UPnP XML responses are rendered from clean, editable Edge.js templates
+- **Pure TypeScript** — fully typed source with minimal dependencies (`cheerio` and `edge.js`)
+
+## Requirements
+
+- Node.js 18 or later (ESM support required)
+- TypeScript 5+ (for development)
+- A local network with DLNA-capable devices to stream to

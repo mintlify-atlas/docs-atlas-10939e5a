@@ -1,97 +1,48 @@
 ---
-title: "Introduction"
-description: "Welcome to the new home for your documentation"
+title: "DLNA Media Server"
+description: "A TypeScript implementation of a DLNA/UPnP media server that streams video content to DLNA-compatible devices on your local network."
 ---
 
-## Setting up
+## Welcome
 
-Get your documentation site up and running in minutes.
+DLNA Media Server is a lightweight, TypeScript-based [DLNA](https://www.dlna.org/) server built on Node.js. Run it on any machine and instantly stream your video library to smart TVs, game consoles, media players, and any other DLNA-compatible device on your local network — no configuration needed.
 
-<Card
-  title="Start here"
-  icon="rocket"
-  href="/quickstart"
-  horizontal
->
-  Follow our three step quickstart guide.
-</Card>
-
-## Make it yours
-
-Design a docs site that looks great and empowers your users.
-
-<Columns cols={2}>
-  <Card
-    title="Edit locally"
-    icon="pen-to-square"
-    href="/development"
-  >
-    Edit your docs locally and preview them in real time.
+<CardGroup cols={2}>
+  <Card title="Quickstart" icon="rocket" href="/quickstart">
+    Get the server running and streaming in minutes
   </Card>
-  <Card
-    title="Customize your site"
-    icon="palette"
-    href="/essentials/settings"
-  >
-    Customize the design and colors of your site to match your brand.
+  <Card title="How It Works" icon="lightbulb" href="/concepts/dlna-upnp">
+    Understand the DLNA/UPnP protocol stack
   </Card>
-    <Card
-    title="Set up navigation"
-    icon="map"
-    href="/essentials/navigation"
-  >
-    Organize your docs to help users find what they need and succeed with your product.
+  <Card title="Configure Your Gallery" icon="film" href="/configuration/gallery">
+    Add your video files to the media gallery
   </Card>
-  <Card
-    title="API documentation"
-    icon="terminal"
-    href="/api-reference/introduction"
-  >
-    Auto-generate API documentation from OpenAPI specifications.
+  <Card title="Architecture" icon="sitemap" href="/architecture/overview">
+    Explore the server's internal structure
   </Card>
-</Columns>
+</CardGroup>
 
-## Create beautiful pages
+## How it works
 
-Everything you need to create world-class documentation.
+<Steps>
+  <Step title="Server starts up">
+    The server auto-detects your local IPv4 address and starts two listeners: an HTTP server on port 8080 (for SOAP/UPnP control) and a UDP multicast socket on port 1900 (for SSDP device discovery).
+  </Step>
+  <Step title="DLNA clients discover the server">
+    When a DLNA client (smart TV, VLC, etc.) searches for media servers, the server responds to its M-SEARCH broadcast with its location and identity — no manual IP entry required.
+  </Step>
+  <Step title="Client browses your library">
+    The client fetches the device description, then sends a SOAP Browse request. The server responds with your video catalog from `gallery.json` in DIDL-Lite XML format.
+  </Step>
+  <Step title="Streaming begins">
+    The client uses the video URLs from the catalog to stream content directly. The server stays running to handle further discovery and browse requests.
+  </Step>
+</Steps>
 
-<Columns cols={2}>
-  <Card
-    title="Write with MDX"
-    icon="pen-fancy"
-    href="/essentials/markdown"
-  >
-    Use MDX to style your docs pages.
-  </Card>
-  <Card
-    title="Code samples"
-    icon="code"
-    href="/essentials/code"
-  >
-    Add sample code to demonstrate how to use your product.
-  </Card>
-  <Card
-    title="Images"
-    icon="image"
-    href="/essentials/images"
-  >
-    Display images and other media.
-  </Card>
-  <Card
-    title="Reusable snippets"
-    icon="recycle"
-    href="/essentials/reusable-snippets"
-  >
-    Write once and reuse across your docs.
-  </Card>
-</Columns>
+## Key features
 
-## Need inspiration?
-
-<Card
-  title="See complete examples"
-  icon="stars"
-  href="https://mintlify.com/customers"
->
-  Browse our showcase of exceptional documentation sites.
-</Card>
+- **Zero-config discovery** — SSDP multicast advertises the server automatically on your LAN
+- **ContentDirectory:1** — full Browse, GetSortCapabilities, and GetSearchCapabilities support
+- **JSON media catalog** — add videos by editing a single `gallery.json` file; no database required
+- **Edge.js XML templates** — clean, editable templates generate all UPnP XML responses
+- **Pure TypeScript** — fully typed, minimal dependencies (`cheerio` and `edge.js`)

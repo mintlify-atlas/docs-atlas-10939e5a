@@ -1,0 +1,163 @@
+---
+title: "UPnP modules"
+description: The SSDP and SOAP modules that implement UPnP protocol communication
+---
+
+The `src/upnp/` directory contains two modules that implement the two protocol layers the server relies on: SSDP for discovery over UDP, and SOAP for control over HTTP.
+
+## SSDP module (`src/upnp/ssdp.ts`)
+
+### Class hierarchy
+
+```
+SsdpMessage
+├── SsdpIncomingMessage   (request: METHOD PATH VERSION)
+└── SsdpOutgoingMessage   (response: VERSION STATUSCODE REASON)
+```
+
+All three classes share a common set of properties via `SsdpMessageOptions`:
+
+```typescript
+export interface SsdpMessageOptions {
+  readonly headers?: Record<string, string>;
+  readonly body?: Buffer;
+  serialize(): Buffer;
+}
+
+export class SsdpMessage implements SsdpMessageOptions {
+  public readonly headers: Record<string, string> = {};
+  public readonly body: Buffer = Buffer.alloc(0);
+  constructor(options: Omit<SsdpMessageOptions, 'serialize'> | Buffer)
+  serialize(): Buffer
+}
+```
+
+### SsdpIncomingMessage
+
+Represents a message received from a UPnP control point (e.g. an `M-SEARCH` discovery request).
+
+```typescript
+export interface SsdpIncomingMessageOptions extends SsdpMessageOptions {
+  readonly method: string;
+  readonly path: string;
+  readonly version: string;
+}
+
+export class SsdpIncomingMessage extends SsdpMessage {
+  public readonly method: string;
+  public readonly path: string;
+  public readonly version: string;
+  constructor(options: Omit<SsdpIncomingMessageOptions, 'serialize'> | Buffer)
+  serialize(): Buffer   // prepends "METHOD PATH VERSION\r\n" before headers
+}
+```
+
+**Constructor overloads:**
+- Passing a `Buffer` parses the raw UDP datagram: the first line is split to extract `method`, `path`, and `version`; subsequent lines separated by `\r\n` are parsed as `Header: Value` pairs.
+- Passing an options object constructs the message directly from the provided fields.
+
+### SsdpOutgoingMessage
+
+Represents a response sent back to a control point.
+
+```typescript
+export interface SsdpOutgoingMessageOptions extends SsdpMessageOptions {
+  readonly version: string;
+  readonly statusCode: number;
+  readonly reason: string;
+}
+
+export class SsdpOutgoingMessage extends SsdpMessage {
+  public readonly version: string;
+  public readonly statusCode: number;
+  public readonly reason: string;
+  constructor(options: Omit<SsdpOutgoingMessageOptions, 'serialize'> | Buffer)
+  serialize(): Buffer   // prepends "VERSION STATUSCODE REASON\r\n" before headers
+}
+```
+
+### The `serialize()` method
+
+All three classes implement `serialize()`, which builds a `Buffer` from the message's headers and body:
+
+1. The status/request line is prepended (class-specific format).
+2. Each header is written as `Name: Value\r\n`.
+3. A blank `\r\n` separates headers from the body.
+4. The body `Buffer` is appended.
+
+### Exported socket instance
+
+```typescript
+const ssdp = dgram.createSocket('udp4');
+ssdp.bind(1900, () => ssdp.addMembership('239.255.255.250'));
+export default ssdp;
+```
+
+The module exports a ready-to-use UDP socket already bound to port **1900** and joined to the UPnP multicast group. `server.ts` attaches a `'message'` listener to it.
+
+---
+
+## SOAP module (`src/upnp/soap.ts`)
+
+### `SoapRequest` class
+
+```typescript
+export class SoapRequest {
+  public static async from(request: IncomingMessage): Promise<SoapRequest>
+
+  public readonly action: string;
+  public readonly body: CheerioAPI;
+}
+```
+
+The `from` static factory method abstracts the async work of reading an HTTP request body:
+
+1. Collects all chunks with `request.toArray()` and concatenates them into a single `Buffer`.
+2. Reads the `SOAPAction` HTTP header to identify which UPnP action was invoked.
+3. Parses the XML body using **Cheerio** (`load(buffer.toString())`), exposing it as a jQuery-like `CheerioAPI` on `body`.
+
+### Exported HTTP server
+
+```typescript
+const soap = http.createServer();
+soap.listen(8080, () => console.log('Listening at soap://%s:%d', ip, 8080));
+export default soap;
+```
+
+The module exports a ready-to-use `http.Server` already listening on port **8080**. `server.ts` attaches a `'request'` listener to it.
+
+---
+
+## Router (`src/router.ts`)
+
+The router is a plain nested object — no framework required:
+
+```typescript
+export default {
+  'GET': {
+    '/description.xml': async (_request, response) => { ... }
+  },
+  'POST': {
+    '/upnp/control/ContentDirectory': async (request, response) => { ... },
+    '/upnp/event/ContentDirectory':   async (request, response) => { ... }
+  }
+}
+```
+
+`server.ts` dispatches to it with a simple two-level lookup:
+
+```typescript
+if (request.method in router) {
+  if (request.url in router[request.method]) {
+    return router[request.method][request.url](request, response);
+  }
+}
+```
+
+### Routes
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/description.xml` | Renders the UPnP device description XML via `description.edge` |
+| `POST` | `/upnp/control/ContentDirectory` | Handles ContentDirectory SOAP actions (Browse, GetSortCapabilities, etc.) |
+| `POST` | `/upnp/event/ContentDirectory` | Handles UPnP event subscription requests |

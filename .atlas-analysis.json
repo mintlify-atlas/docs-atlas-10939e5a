@@ -1,0 +1,71 @@
+{
+  "projectType": "general",
+  "projectName": "DLNA Media Server",
+  "projectDescription": "A TypeScript implementation of a DLNA/UPnP media server that streams video content to DLNA-compatible devices on a local network.",
+  "theme": "luma",
+  "primaryColor": "#2563EB",
+  "lightColor": null,
+  "darkColor": null,
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Documentation",
+        "groups": [
+          {
+            "group": "Get Started",
+            "pages": [
+              "introduction",
+              "quickstart"
+            ]
+          },
+          {
+            "group": "How It Works",
+            "pages": [
+              "concepts/dlna-upnp",
+              "concepts/ssdp-discovery",
+              "concepts/soap-content-directory"
+            ]
+          },
+          {
+            "group": "Configuration",
+            "pages": [
+              "configuration/gallery",
+              "configuration/server-settings"
+            ]
+          },
+          {
+            "group": "Architecture",
+            "pages": [
+              "architecture/overview",
+              "architecture/upnp-modules",
+              "architecture/templates"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "keyFeatures": [
+    "UPnP/DLNA MediaServer:1 device advertisement via SSDP",
+    "ContentDirectory:1 service with Browse, GetSortCapabilities, and GetSearchCapabilities actions",
+    "SOAP over HTTP for UPnP service control",
+    "Edge.js templating for XML response generation",
+    "Auto-detection of local IPv4 network address",
+    "JSON-driven media gallery for video content",
+    "Zero external runtime dependencies beyond cheerio and edge.js"
+  ],
+  "publicApiSurface": [
+    "SsdpMessage",
+    "SsdpIncomingMessage",
+    "SsdpOutgoingMessage",
+    "SoapRequest",
+    "SoapRequest.from(request)",
+    "GET /description.xml",
+    "POST /upnp/control/ContentDirectory",
+    "POST /upnp/event/ContentDirectory",
+    "ContentDirectory#Browse",
+    "ContentDirectory#GetSortCapabilities",
+    "ContentDirectory#GetSearchCapabilities",
+    "gallery.json (videos, metadata)"
+  ]
+}

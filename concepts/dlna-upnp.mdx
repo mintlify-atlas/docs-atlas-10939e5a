@@ -1,0 +1,60 @@
+---
+title: "DLNA and UPnP overview"
+description: "How DLNA and UPnP work together to enable media streaming"
+---
+
+## What are DLNA and UPnP?
+
+**DLNA** (Digital Living Network Alliance) is a set of interoperability guidelines built on top of UPnP that defines how devices share media on a local network. Smart TVs, game consoles, and media players that display a "DLNA certified" badge follow these guidelines.
+
+**UPnP** (Universal Plug and Play) is the underlying protocol stack that DLNA relies on. It handles device discovery, description, and control — all without any manual configuration on the part of the user.
+
+This server implements the UPnP `MediaServer:1` device type, which is the profile DLNA clients look for when scanning for media sources.
+
+## Protocol stack
+
+The server implements three layers of the UPnP stack in sequence:
+
+| Layer | Protocol | Purpose |
+|---|---|---|
+| Discovery | SSDP over UDP | Advertise the server on the local network |
+| Description | HTTP + XML | Describe available services to clients |
+| Control | SOAP over HTTP | Handle media browse and search requests |
+
+Clients move through these layers in order: discover the server, fetch its description, then issue control commands.
+
+## Services declared in the device description
+
+The device description at `/description.xml` declares three UPnP services:
+
+- **ContentDirectory:1** — lets clients browse and search the media library. This is the primary service this server implements.
+- **ConnectionManager:1** — negotiates connection parameters between client and server.
+- **AVTransport:1** — controls playback state (play, pause, seek).
+
+<Info>
+  This implementation focuses on ContentDirectory. The ConnectionManager and AVTransport endpoints are declared in the device description so clients recognize the server as a valid MediaServer, but their control URLs currently return 404.
+</Info>
+
+## How DLNA clients interact with the server
+
+A DLNA client (a smart TV, for example) does not need a static IP address or manual server entry. The interaction follows a fixed sequence:
+
+<Steps>
+  <Step title="Server advertises via SSDP">
+    At startup, the server listens on UDP port 1900 and responds to multicast M-SEARCH requests. The response tells clients where to find the device description.
+  </Step>
+  <Step title="Client fetches /description.xml">
+    The client makes a GET request to the `LOCATION` URL from the SSDP response. The server returns an XML document listing its device type, friendly name, and available services.
+  </Step>
+  <Step title="Client sends a SOAP Browse request">
+    The client sends an HTTP POST to `/upnp/control/ContentDirectory` with a SOAP envelope containing a `Browse` action. The server responds with a DIDL-Lite XML payload describing available videos.
+  </Step>
+  <Step title="Client fetches video and begins playback">
+    The client extracts the video URL from the DIDL-Lite response and begins streaming directly from the server's HTTP endpoint.
+  </Step>
+</Steps>
+
+## Further reading
+
+- [SSDP device discovery](/concepts/ssdp-discovery) — how the server advertises itself on the network
+- [SOAP and the ContentDirectory service](/concepts/soap-content-directory) — how clients browse the media library

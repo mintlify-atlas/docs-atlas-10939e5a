@@ -1,0 +1,99 @@
+---
+title: "Media gallery"
+description: "Configure the videos that the DLNA server serves to clients."
+---
+
+The file `resources/gallery.json` is the single source of truth for your media library. When a DLNA client browses the server, the server reads this file and returns the list of videos it contains. To add, remove, or update videos, edit this file and restart the server.
+
+## Schema
+
+The file has two top-level keys: `metadata` and `videos`.
+
+### `metadata`
+
+<ParamField body="metadata.version" type="number" required>
+  The `UpdateID` sent to DLNA clients. Increment this value whenever you change your library so clients know to refresh their cached view.
+</ParamField>
+
+<ParamField body="metadata.totalVideos" type="number" required>
+  The total number of video items in the library. This value is sent to clients as `TotalMatches` in Browse responses. It should always match the length of the `videos` array.
+</ParamField>
+
+### `videos`
+
+<ParamField body="videos" type="array" required>
+  The list of video items the server advertises to clients.
+
+  <Expandable title="Video item fields">
+    <ParamField body="videos[].id" type="string" required>
+      A unique identifier for this item, used as the `id` attribute in the DIDL-Lite XML response. Use simple strings like `"1"`, `"2"`, and so on.
+    </ParamField>
+
+    <ParamField body="videos[].title" type="string" required>
+      The display name shown in the DLNA client's media browser.
+    </ParamField>
+
+    <ParamField body="videos[].mimeType" type="string" required>
+      The MIME type of the video file. Common values:
+      - `video/mp4` — H.264/AAC in MP4 container
+      - `video/x-matroska` — MKV container
+      - `video/mpeg` — MPEG-1/2
+      - `video/quicktime` — MOV container
+    </ParamField>
+
+    <ParamField body="videos[].url" type="string" required>
+      The full HTTP URL the client uses to stream the video. This must be reachable from the client device over the network.
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+## Example
+
+```json resources/gallery.json
+{
+  "metadata": {
+    "version": 1,
+    "totalVideos": 3
+  },
+  "videos": [
+    {
+      "id": "1",
+      "title": "Big Buck Bunny",
+      "mimeType": "video/mp4",
+      "url": "http://192.168.1.100:8000/big-buck-bunny.mp4"
+    },
+    {
+      "id": "2",
+      "title": "Elephants Dream",
+      "mimeType": "video/mp4",
+      "url": "http://192.168.1.100:8000/elephants-dream.mp4"
+    },
+    {
+      "id": "3",
+      "title": "Nature Documentary",
+      "mimeType": "video/x-matroska",
+      "url": "http://192.168.1.100:8000/nature-doc.mkv"
+    }
+  ]
+}
+```
+
+## Important notes
+
+- **`totalVideos` must match `videos.length`** — if the values differ, some clients will display incorrect counts or fail to display all items.
+- **The file is read at startup** — changes to `gallery.json` do not take effect until you restart the server.
+- **IDs must be unique** — duplicate `id` values will cause undefined behavior in DLNA clients.
+
+<Warning>
+  Do not use `file://` paths in the `url` field. DLNA clients are separate network devices and cannot access your local filesystem. Every URL must be an HTTP URL reachable from the client over the network.
+</Warning>
+
+<Tip>
+  To serve video files stored on your machine, use a simple HTTP file server in the directory containing your videos:
+
+  ```bash
+  npx serve /path/to/your/videos
+  ```
+
+  This starts a local HTTP server (default port `3000`) that exposes the files in that directory. Use the resulting URL — e.g., `http://192.168.1.100:3000/my-video.mp4` — as the `url` in `gallery.json`. Make sure the port is accessible from client devices on your network.
+</Tip>

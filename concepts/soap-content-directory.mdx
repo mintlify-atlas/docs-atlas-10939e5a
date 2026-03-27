@@ -1,0 +1,113 @@
+---
+title: "SOAP and the ContentDirectory service"
+description: "How DLNA clients control the server using SOAP over HTTP"
+---
+
+## What is SOAP in this context?
+
+SOAP (Simple Object Access Protocol) is the control layer of UPnP. After a client discovers the server and fetches its device description, it issues commands by sending XML-wrapped HTTP POST requests. Each request targets a specific UPnP service action.
+
+In this server, all SOAP traffic is handled by an HTTP server running on port 8080. Incoming requests are parsed by `SoapRequest.from()`, which reads the raw body buffer and extracts the `SOAPAction` header to determine which action to invoke.
+
+```typescript
+// src/upnp/soap.ts
+import http from 'node:http';
+
+const server = http.createServer();
+// SoapRequest.from(request) reads the body, extracts SOAPAction header,
+// and parses the XML envelope with Cheerio
+```
+
+## Control endpoints
+
+The device description declares two ContentDirectory URLs:
+
+| Endpoint | Purpose |
+|---|---|
+| `POST /upnp/control/ContentDirectory` | Control — clients send Browse, GetSortCapabilities, and GetSearchCapabilities actions here |
+| `POST /upnp/event/ContentDirectory` | Events — clients subscribe here to receive notifications when the content library changes |
+
+<Info>
+  Both endpoints use the same dispatch logic: the incoming request body is parsed via `SoapRequest.from()` and the `SOAPAction` header is used to look up the handler in `services.ts`. The event endpoint does not implement a separate subscription registry in this version.
+</Info>
+
+## ContentDirectory:1 actions
+
+The server handles three standard ContentDirectory:1 actions, all identified by the `SOAPAction` header:
+
+### Browse
+
+**SOAPAction:** `urn:schemas-upnp-org:service:ContentDirectory:1#Browse`
+
+The primary action. The client requests a listing of media items. The server reads from `gallery.json` and returns a DIDL-Lite XML payload describing each video — its title, URL, MIME type, and metadata.
+
+Example DIDL-Lite response:
+
+```xml
+<?xml version="1.0" encoding="utf-8"?>
+<DIDL-Lite xmlns="urn:schemas-upnp-org:metadata-1-0/DIDL-Lite/"
+           xmlns:dc="http://purl.org/dc/elements/1.1/"
+           xmlns:upnp="urn:schemas-upnp-org:metadata-1-0/upnp/">
+  <item id="1" parentID="0" restricted="1">
+    <dc:title>Example Video</dc:title>
+    <upnp:class>object.item.videoItem</upnp:class>
+    <res protocolInfo="http-get:*:video/mp4:*">
+      http://192.168.1.10:8080/media/example.mp4
+    </res>
+  </item>
+</DIDL-Lite>
+```
+
+The response is wrapped in a full SOAP envelope before being sent back to the client.
+
+### GetSortCapabilities
+
+**SOAPAction:** `urn:schemas-upnp-org:service:ContentDirectory:1#GetSortCapabilities`
+
+The client asks which metadata properties can be used to sort results. The server returns an empty `SortCapabilities` element, indicating no sort constraints are imposed.
+
+### GetSearchCapabilities
+
+**SOAPAction:** `urn:schemas-upnp-org:service:ContentDirectory:1#GetSearchCapabilities`
+
+The client asks which metadata properties can be used in search queries. The server returns `*` in `SearchCaps`, indicating that all search properties are supported.
+
+## How SoapRequest.from() parses a request
+
+1. Reads the full HTTP request body into a buffer.
+2. Extracts the `SOAPAction` header — this is a quoted string like `"urn:schemas-upnp-org:service:ContentDirectory:1#Browse"`.
+3. Parses the XML body using Cheerio to extract action-specific parameters (for example, the `BrowseFlag` and `StartingIndex` fields in a Browse request).
+4. Returns a structured object the router uses to dispatch to the correct service handler.
+
+## A full SOAP Browse request
+
+Here is what a client sends to `/upnp/control/ContentDirectory`:
+
+```xml
+POST /upnp/control/ContentDirectory HTTP/1.1
+Content-Type: text/xml; charset="utf-8"
+SOAPAction: "urn:schemas-upnp-org:service:ContentDirectory:1#Browse"
+
+<?xml version="1.0" encoding="utf-8"?>
+<s:Envelope xmlns:s="http://schemas.xmlsoap.org/soap/envelope/"
+            s:encodingStyle="http://schemas.xmlsoap.org/soap/encoding/">
+  <s:Body>
+    <u:Browse xmlns:u="urn:schemas-upnp-org:service:ContentDirectory:1">
+      <ObjectID>0</ObjectID>
+      <BrowseFlag>BrowseDirectChildren</BrowseFlag>
+      <Filter>*</Filter>
+      <StartingIndex>0</StartingIndex>
+      <RequestedCount>0</RequestedCount>
+      <SortCriteria></SortCriteria>
+    </u:Browse>
+  </s:Body>
+</s:Envelope>
+```
+
+The server responds with a SOAP envelope containing the DIDL-Lite XML shown above, along with `NumberReturned`, `TotalMatches`, and `UpdateID` fields.
+
+## Further reading
+
+- [DLNA and UPnP overview](/concepts/dlna-upnp) — the full protocol stack
+- [SSDP device discovery](/concepts/ssdp-discovery) — how clients find the server before issuing SOAP requests
+- [Configure your gallery](/configuration/gallery) — how to add videos that appear in Browse responses

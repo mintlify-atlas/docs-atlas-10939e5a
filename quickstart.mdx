@@ -1,80 +1,125 @@
 ---
 title: "Quickstart"
-description: "Start building awesome documentation in minutes"
+description: "Get a DLNA media server running and streaming video to your network in minutes."
 ---
 
-## Get started in three steps
+## Prerequisites
 
-Get your documentation site running locally and make your first customization.
+Before you begin, make sure you have the following installed:
 
-### Step 1: Set up your local environment
+- **Node.js 18+** — required for ESM module support
+- **TypeScript 5+** — used to compile the server source
+- **Git** — to clone the repository
 
-<AccordionGroup>
-  <Accordion icon="copy" title="Clone your docs locally">
-    During the onboarding process, you created a GitHub repository with your docs content if you didn't already have one. You can find a link to this repository in your [dashboard](https://dashboard.mintlify.com).
-    
-    To clone the repository locally so that you can make and preview changes to your docs, follow the [Cloning a repository](https://docs.github.com/en/repositories/creating-and-managing-repositories/cloning-a-repository) guide in the GitHub docs.
-  </Accordion>
-  <Accordion icon="rectangle-terminal" title="Start the preview server">
-    1. Install the Mintlify CLI: `npm i -g mint`
-    2. Navigate to your docs directory and run: `mint dev`
-    3. Open `http://localhost:3000` to see your docs live!
-    
-    <Tip>Your preview updates automatically as you edit files.</Tip>
-  </Accordion>
-</AccordionGroup>
+## Set up the server
 
-### Step 2: Deploy your changes
+<Steps>
+  <Step title="Clone the repository">
+    Clone the project and navigate into the directory:
 
-<AccordionGroup>
-  <Accordion icon="github" title="Install our GitHub app">
-    Install the Mintlify GitHub app from your [dashboard](https://dashboard.mintlify.com/settings/organization/github-app).
-    
-    Our GitHub app automatically deploys your changes to your docs site, so you don't need to manage deployments yourself.
-</Accordion>
-<Accordion icon="palette" title="Update your site name and colors">
-    For a first change, let's update the name and colors of your docs site.
+    ```bash
+    git clone https://github.com/swimauger/dlna.git && cd dlna
+    ```
+  </Step>
 
-    1. Open `docs.json` in your editor.
-    2. Change the `"name"` field to your project name.
-    3. Update the `"colors"` to match your brand.
-    4. Save and see your changes instantly at `http://localhost:3000`.
+  <Step title="Install dependencies">
+    Install the required runtime and development dependencies:
 
-    <Tip>Try changing the primary color to see an immediate difference!</Tip>
-  </Accordion>
-</AccordionGroup>
+    ```bash
+    npm install
+    ```
 
-### Step 3: Go live
+    This installs `cheerio` (XML parsing), `edge.js` (templating), and TypeScript type definitions.
+  </Step>
 
-<Accordion icon="rocket" title="Publish your docs">
-  1. Commit and push your changes.
-  2. Your docs will update and be live in moments!
-</Accordion>
+  <Step title="Build the project">
+    Compile the TypeScript source to JavaScript:
 
-## Next steps
+    ```bash
+    npm run build
+    ```
 
-Now that you have your docs running, explore these key features:
+    Output files are written to the `out/` directory. The compiler targets ESNext with `NodeNext` module resolution.
+  </Step>
 
-<CardGroup cols={2}>
+  <Step title="Add a video to your gallery">
+    Open `resources/gallery.json` and add your video entries. Each entry needs an `id`, `title`, `mimeType`, and a publicly accessible `url`.
 
-<Card title="Write Content" icon="pen-to-square" href="/essentials/markdown">
-  Learn MDX syntax and start writing your documentation.
-</Card>
+    ```json resources/gallery.json
+    {
+      "metadata": {
+        "version": 1,
+        "totalVideos": 2
+      },
+      "videos": [
+        {
+          "id": "1",
+          "title": "My Video",
+          "mimeType": "video/mp4",
+          "url": "http://192.168.1.100/videos/my-video.mp4"
+        },
+        {
+          "id": "2",
+          "title": "Another Video",
+          "mimeType": "video/mp4",
+          "url": "http://192.168.1.100/videos/another-video.mp4"
+        }
+      ]
+    }
+    ```
 
-<Card title="Customize style" icon="palette" href="/essentials/settings">
-  Make your docs match your brand perfectly.
-</Card>
+    <Note>
+      The `url` field must point to a location that your DLNA client device can reach over the network. A direct HTTP URL to the video file is required — the server does not proxy or transcode media.
+    </Note>
 
-<Card title="Add code examples" icon="square-code" href="/essentials/code">
-  Include syntax-highlighted code blocks.
-</Card>
+    Update `totalVideos` to match the number of entries in the `videos` array.
+  </Step>
 
-<Card title="API documentation" icon="code" href="/api-reference/introduction">
-  Auto-generate API docs from OpenAPI specs.
-</Card>
+  <Step title="Start the server">
+    Run the compiled server:
 
-</CardGroup>
+    ```bash
+    npm start
+    ```
+  </Step>
+</Steps>
+
+## What to expect
+
+Once started, the server logs two lines confirming both services are active:
+
+```
+Listening at soap://192.168.1.50:8080
+Listening at ssdp://192.168.1.50:1900
+```
+
+- The **SOAP server** listens on port `8080` and handles HTTP requests from DLNA clients — device description, ContentDirectory browsing, and event subscriptions.
+- The **SSDP socket** listens on UDP port `1900` and joins the `239.255.255.250` multicast group to advertise the server on your local network.
+
+The IP address shown is auto-detected from your machine's active network interface.
+
+## Connect a DLNA client
+
+No manual configuration is needed on client devices. Because the server responds to UPnP `M-SEARCH` discovery messages, any DLNA-compatible device on the same network will find it automatically.
+
+**Smart TVs** — open the media source or device list; the server appears as a media server.
+
+**VLC** — go to **View > Playlist**, then expand **Local Network > Universal Plug'n'Play** to find the server and browse your gallery.
+
+**Other clients** — any UPnP/DLNA MediaRenderer or control point app (Kodi, Infuse, BubbleUPnP) will discover and connect automatically.
 
 <Note>
-  **Need help?** See our [full documentation](https://mintlify.com/docs) or join our [community](https://mintlify.com/community).
+  The server advertises itself on the network as **"NodeJS Media Server"** using the `SERVER` header `node/[version] UPnP/1.1`. This is the name DLNA clients display in their device lists.
 </Note>
+
+<Tip>
+  During development, use `npm run debug` instead of `npm start`. This runs the server with `node --watch`, which automatically restarts whenever files in `out/` change. Pair it with `npm run watch` (TypeScript watch mode) in a second terminal for a fast edit-compile-reload loop.
+
+  ```bash
+  # Terminal 1 — recompile on source changes
+  npm run watch
+
+  # Terminal 2 — restart server on output changes
+  npm run debug
+  ```
+</Tip>
